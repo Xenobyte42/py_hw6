@@ -53,7 +53,7 @@ class BlogRedactor:
         if username not in self.__authorized_users:
             print("User must be authorized to create blog!")
             return
-        sql = """INSERT IGNORE INTO blog(user_id, name, sample)
+        sql = """INSERT INTO blog(user_id, name, sample)
                  VALUES('{}', '{}', '{}');""".format(self.__authorized_users[username],blogname, sample)
 
         print("Blog was successfully created!")
@@ -116,8 +116,7 @@ class BlogRedactor:
         if username not in self.__authorized_users:
             print("User must be authorized to create post!")
             return
-        sql = """INSERT IGNORE
-                 INTO post(header, description, user_id)
+        sql = """INSERT INTO post(header, description, user_id)
                  VALUES('{}', '{}', {})""".format(header, description,
                                                   self.__authorized_users[username])
         self._cursor.execute(sql)
@@ -132,10 +131,13 @@ class BlogRedactor:
             sql = """SELECT id FROM blog
                      WHERE name='{}';""".format(blog)
             self._cursor.execute(sql)
-            blog_id = self._cursor.fetchall()[0][0]
-            sql = "INSERT INTO blogpost(post_id, blog_id) VALUES({}, {})".format(post_id, blog_id)
-            self._cursor.execute(sql)
-            print("Post was successfully added to blog", blog, "!")
+            if not self._cursor.rowcount:
+                print("No such blog", blog, "!")
+            else:
+                blog_id = self._cursor.fetchall()[0][0]
+                sql = "INSERT INTO blogpost(post_id, blog_id) VALUES({}, {})".format(post_id, blog_id)
+                self._cursor.execute(sql)
+                print("Post was successfully added to blog", blog, "!")
 
     def update_post_header(self, username, header, new_header):
         if username not in self.__authorized_users:
@@ -241,9 +243,9 @@ class BlogRedactor:
             comm_id = self._cursor.fetchall()[0][0]
         sql = """INSERT INTO comment(user_id, post_id, parent_comment_id, description)
                  VALUES({}, {}, {}, '{}');""".format(self.__authorized_users[username],
-                                                    post_id,
-                                                    comm_id,
-                                                    comment_text)
+                                                     post_id,
+                                                     comm_id,
+                                                     comment_text)
         self._cursor.execute(sql)
         print("Comment was successfully added!")
 
@@ -266,6 +268,58 @@ class BlogRedactor:
         comments = self._cursor.fetchall()
         return [comment[0] for comment in comments]
 
+    def get_users_comments(self, users, blog):
+        comments = []
+
+        for user in users:
+            sql = """SELECT id FROM user WHERE login='{}';""".format(user)
+            self._cursor.execute(sql)
+
+            if self._cursor.rowcount:
+                user_id = self._cursor.fetchall()[0][0]
+                sql = """SELECT post_id, description
+                         FROM comment WHERE user_id={};""".format(user_id)
+                self._cursor.execute(sql)
+                comm_list = [(comment[0], comment[1]) for comment in self._cursor.fetchall()]
+                sql = """SELECT id FROM blog WHERE name='{}';""".format(blog)
+                self._cursor.execute(sql)
+
+                if self._cursor.rowcount:
+                    blog_id = self._cursor.fetchall()[0][0]
+                    sql = """SELECT post_id FROM blogpost WHERE blog_id={};""".format(blog_id)
+                    self._cursor.execute(sql)
+                    blog_list = [blog[0] for blog in self._cursor.fetchall()]
+
+                    for comm in comm_list:
+                        if comm[0] in blog_list:
+                            comments.append(comm[1])
+        return comments
+
+    def get_sub_comments(self, post, comment):
+        sql = """SELECT id FROM post WHERE header='{}';""".format(post)
+        self._cursor.execute(sql)
+        if not self._cursor.rowcount:
+            print("No such post!")
+            return
+
+        post_id = self._cursor.fetchall()[0][0]
+        sql = """SELECT id FROM comment
+                 WHERE description='{}' AND post_id={};""".format(comment, post_id)
+        self._cursor.execute(sql)
+        if not self._cursor.rowcount:
+            return None
+        comm_id = self._cursor.fetchall()[0][0]
+        sql = """SELECT description FROM comment
+                WHERE post_id={} AND parent_comment_id={};""".format(post_id, comm_id)
+        self._cursor.execute(sql)
+        if not self._cursor.rowcount:
+            return comment
+        comments_tree = {}
+        comments_tree[comment] = []
+        for com in self._cursor.fetchall():
+            comments_tree[comment].append(self.get_sub_comments(post, com[0]))
+        return comments_tree
+
     def commit_changes(self):
         self._db.commit()
         print("Changes were successfully commited!")
@@ -277,9 +331,9 @@ class BlogRedactor:
 
 if __name__ == "__main__":
     blog_red = BlogRedactor()
-    # blog_red.add_user('misha', '123456')
-    blog_red.authorize('misha', '123456')
-    # blog_red.create_blog('misha', 'My blog', 'This blog about me and my friends')
+    #blog_red.add_user('newmisha', '123456')
+    blog_red.authorize('newmisha', '123456')
+    #blog_red.create_blog('newmisha', 'New blog', 'This blog about me and my friends')
     # blog_red.update_blog_name('misha', 'My blog', 'My first blog')
     # blog_red.update_blog_sample('misha', 'My first blog', 'This is about only me')
     # blog_red.create_post('misha', 'NewPost', 'How old are you?', ['My first blog'])
@@ -287,10 +341,15 @@ if __name__ == "__main__":
     # blog_red.update_post_header('misha', 'ergrgsffergerg', 'My new post x2')
     # blog_red.update_post_description('misha', 'NewPost', 'This is changed descr')
     # blog_red.create_blog('misha', 'My Blood', '21pilot')
-    print('=' * 10)
-    print(blog_red.get_user_blogs('misha'))
-    print('=' * 10)
-    print(blog_red.get_comment_list('misha', 'My new post x2'))
-    print('=' * 10)
+
+    
+    #blog_red.create_post('newmisha', 'New post', 'Some inf', ['New blog'])
+    #blog_red.add_comment('newmisha', 'New post', 'Hello')
+    #blog_red.add_comment('newmisha', 'New post', 'Privet')
+    #blog_red.add_comment('newmisha', 'New post', 'wassap bro', 'Hello')
+    #blog_red.add_comment('newmisha', 'New post', 'Sheeee ne vmerla', 'Privet')
+
+    print(blog_red.get_sub_comments('New post', 'Hello'))
+    print(blog_red.get_sub_comments('New post', 'Privet'))
     blog_red.commit_changes()
     blog_red.close_connection()

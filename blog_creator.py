@@ -145,7 +145,6 @@ def parse_args(args):
 
 if __name__ == "__main__":
     params = parse_args(sys.argv[1:])
-
     blog_cr = BlogCreator(params.db_name, params.cfg_path)
     blog_cr.create()
 
