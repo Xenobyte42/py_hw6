@@ -25,6 +25,9 @@ class BlogRedactor:
 
         self.__authorized_users = {}
 
+    def set_authorized_users(self, users):
+        self.__authorized_users = users
+
     def add_user(self, login, password):
         sql = "INSERT INTO user(login, password) VALUES('{}', '{}');".format(login, password)
         self._cursor.execute(sql)
@@ -41,10 +44,10 @@ class BlogRedactor:
             print("No such user!")
 
     def get_user_list(self):
-        sql = "SELECT login FROM user;"
+        sql = "SELECT id, login FROM user;"
         self._cursor.execute(sql)
         user_list = self._cursor.fetchall() 
-        return [user[0] for user in user_list]
+        return {user[1]:user[0] for user in user_list}
 
     def create_blog(self, username, blogname, sample):
         if username not in self.__authorized_users:
@@ -127,7 +130,7 @@ class BlogRedactor:
         post_id = self._cursor.fetchall()[0][0] 
         for blog in blogs:
             sql = """SELECT id FROM blog
-                     WHERE name='{}' AND user_id={}""".format(blog, self.__authorized_users[username])
+                     WHERE name='{}';""".format(blog)
             self._cursor.execute(sql)
             blog_id = self._cursor.fetchall()[0][0]
             sql = "INSERT INTO blogpost(post_id, blog_id) VALUES({}, {})".format(post_id, blog_id)
@@ -208,13 +211,18 @@ class BlogRedactor:
         else:
             print("No post with such header!")
 
+    def get_posts_list(self):
+        sql = "SELECT header FROM post;"
+        self._cursor.execute(sql)
+        posts_list = self._cursor.fetchall() 
+        return [post[0] for post in posts_list]
+
     def add_comment(self, username, post_header, comment_text, comment_descr=""):
         if username not in self.__authorized_users:
             print("User must be authorized to create comment!")
             return
         sql = """SELECT id FROM post
-                 WHERE header='{}' AND user_id={};""".format(post_header,
-                                                             self.__authorized_users[username])
+                 WHERE header='{}';""".format(post_header)
         self._cursor.execute(sql)
         if not self._cursor.rowcount:
             print("No such post!")
@@ -224,9 +232,7 @@ class BlogRedactor:
         if comment_descr:
             sql = """SELECT id FROM comment
                      WHERE post_id={}
-                     AND user_id={}
                      AND description='{}';""".format(post_id,
-                                                     self.__authorized_users[username],
                                                      comment_descr)
             self._cursor.execute(sql)
             if not self._cursor.rowcount:

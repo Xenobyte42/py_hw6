@@ -1,5 +1,7 @@
 import configparser
 import pymysql
+import sys
+import argparse
 
 
 BLOG_SECTION_NAME = "database_cfg"
@@ -10,7 +12,7 @@ BLOG_DBNAME_VAR = "database_name"
 
 class BlogCreator:
 
-    def __init__(self, db_name, cfg="db.cfg"):
+    def __init__(self, db_name, cfg):
         self._cfg_path = cfg
         self._cfg_parser = configparser.ConfigParser()
         self._cfg_parser.read(self._cfg_path)
@@ -22,6 +24,17 @@ class BlogCreator:
                                    user=self._login,
                                    passwd=self._password)
         self._cursor = self._db.cursor()
+
+    def create(self):
+        blog_cr.create_blog_database()
+        blog_cr.connect_to_db()
+        blog_cr.create_user_table()
+        blog_cr.create_blog_table()
+        blog_cr.create_post_table()
+        blog_cr.create_blogpost_table()
+        blog_cr.create_comment_table()
+        blog_cr.close_connection()
+        
 
     def create_blog_database(self):
         sql = "CREATE DATABASE IF NOT EXISTS {};".format(self._db_name, self._db_name)
@@ -113,13 +126,26 @@ class BlogCreator:
             self._cfg_parser.write(cfg)
 
 
+def parse_args(args):
+    parser = argparse.ArgumentParser(description='This is a faker parser')
+    parser.add_argument(
+        '-с',
+        action="store",
+        dest="cfg_path",
+        type=str,
+        default='db.cfg',
+        help='Path to config file')
+    parser.add_argument(
+        '-n',
+        action="store",
+        dest="db_name",
+        type=str,
+        help='The name of the database')
+    return parser.parse_args(args)
+
 if __name__ == "__main__":
-    blog_cr = BlogCreator('blog_db4')
-    blog_cr.create_blog_database()
-    blog_cr.connect_to_db()
-    blog_cr.create_user_table()
-    blog_cr.create_blog_table()
-    blog_cr.create_post_table()
-    blog_cr.create_blogpost_table()
-    blog_cr.create_comment_table()
-    blog_cr.close_connection()
+    params = parse_args(sys.argv[1:])
+
+    blog_cr = BlogCreator(params.db_name, params.cfg_path)
+    blog_cr.create()
+
