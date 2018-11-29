@@ -245,7 +245,7 @@ class BlogRedactor:
         posts_list = self._cursor.fetchall() 
         return [post[0] for post in posts_list]
 
-    def add_comment(self, username, post_header, comment_text, comment_descr=""):
+    def add_comment(self, username, post_header, comment_text, comment_id=None):
         if username not in self.__authorized_users:
             print("User must be authorized to create comment!")
             return
@@ -255,18 +255,9 @@ class BlogRedactor:
         if not self._cursor.rowcount:
             print("No such post!")
             return
+
         post_id = self._cursor.fetchone()[0]
-        comm_id = 'NULL'
-        if comment_descr:
-            sql = """SELECT id FROM comment
-                     WHERE post_id={}
-                     AND description='{}';""".format(post_id,
-                                                     comment_descr)
-            self._cursor.execute(sql)
-            if not self._cursor.rowcount:
-                print("No such comment in this post!")
-                return
-            comm_id = self._cursor.fetchone()[0]
+        comm_id = comment_id or 'NULL'
         sql = """INSERT INTO comment(user_id, post_id, parent_comment_id, description)
                  VALUES({}, {}, {}, '{}');""".format(self.__authorized_users[username],
                                                      post_id,
@@ -275,18 +266,11 @@ class BlogRedactor:
         self._cursor.execute(sql)
         print("Comment was successfully added!")
 
-    def get_comment_list(self, username, post_header):
+    def get_comment_list(self, username, post_id):
         if username not in self.__authorized_users:
             print("User must be authorized to get comment list!")
             return
-        sql = """SELECT id FROM post
-                 WHERE user_id={} AND header='{}'""".format(self.__authorized_users[username],
-                                                            post_header)
-        self._cursor.execute(sql)
-        if not self._cursor.rowcount:
-            print("No such post!")
-            return
-        post_id = self._cursor.fetchone()[0]
+
         sql = """SELECT description FROM comment
                  WHERE user_id={} AND post_id={}""".format(self.__authorized_users[username],
                                                            post_id)
