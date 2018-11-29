@@ -59,12 +59,12 @@ class BlogRedactor:
         print("Blog was successfully created!")
         self._cursor.execute(sql)
 
-    def update_blog_name(self, username, last_name, new_name):
+    def update_blog_name(self, username, blog_id, new_name):
         if username not in self.__authorized_users:
             print("User must be authorized to update blog name!")
             return
-        sql = """UPDATE blog SET name='{}' WHERE user_id={} AND name='{}';""".format(new_name,
-                                                      self.__authorized_users[username], last_name)
+        sql = """UPDATE blog SET name='{}' WHERE user_id={} AND id={};""".format(new_name,
+                                                      self.__authorized_users[username], blog_id)
 
         self._cursor.execute(sql)
         if self._cursor.rowcount:
@@ -72,13 +72,13 @@ class BlogRedactor:
         else:
             print("No blog with that name!")
         
-    def update_blog_sample(self, username, blog_name, new_sample):
+    def update_blog_sample(self, username, blog_id, new_sample):
         if username not in self.__authorized_users:
             print("User must be authorized to update blog sample!")
             return
         sql = """UPDATE blog SET sample='{}'
-                 WHERE user_id={} AND name='{}';""".format(new_sample,
-                                                      self.__authorized_users[username], blog_name)
+                 WHERE user_id={} AND id={};""".format(new_sample,
+                                                      self.__authorized_users[username], blog_id)
 
         self._cursor.execute(sql)
         if self._cursor.rowcount:
@@ -86,11 +86,11 @@ class BlogRedactor:
         else:
             print("No blog with that name or sample has not changed!")
 
-    def delete_blog(self, username, blogname):
+    def delete_blog(self, username, blog_id):
         if username not in self.__authorized_users:
             print("User must be authorized to delete blog!")
             return
-        sql = "DELETE FROM blog WHERE user_id={} AND name='{}';".format(self.__authorized_users[username], blogname)
+        sql = "DELETE FROM blog WHERE user_id={} AND id={};".format(self.__authorized_users[username], blog_id)
         self._cursor.execute(sql)
         if self._cursor.rowcount:
             print("Blog was successfully deleted!")
@@ -116,36 +116,50 @@ class BlogRedactor:
         if username not in self.__authorized_users:
             print("User must be authorized to create post!")
             return
+
         sql = """INSERT INTO post(header, description, user_id)
                  VALUES('{}', '{}', {})""".format(header, description,
                                                   self.__authorized_users[username])
         self._cursor.execute(sql)
         print("Post was successfully created!")
+
         sql = """SELECT id FROM post
                  WHERE user_id={}
                  AND description='{}'
                  AND header='{}'""".format(self.__authorized_users[username], description, header)
         self._cursor.execute(sql)
-        post_id = self._cursor.fetchall()[0][0] 
-        for blog in blogs:
-            sql = """SELECT id FROM blog
-                     WHERE name='{}';""".format(blog)
-            self._cursor.execute(sql)
-            if not self._cursor.rowcount:
-                print("No such blog", blog, "!")
-            else:
-                blog_id = self._cursor.fetchall()[0][0]
-                sql = "INSERT INTO blogpost(post_id, blog_id) VALUES({}, {})".format(post_id, blog_id)
-                self._cursor.execute(sql)
-                print("Post was successfully added to blog", blog, "!")
+        post_id = self._cursor.fetchone()[0]
 
-    def update_post_header(self, username, header, new_header):
+        # String like ('blog1','blog2');
+        blog_list = """("""
+        for blog in blogs:
+            blog_list += """'{}',""".format(blog)
+        blog_list = blog_list.rstrip(',') + """);"""
+        
+        sql = """SELECT id FROM blog WHERE name IN """ + blog_list
+        self._cursor.execute(sql)
+        if not self._cursor.rowcount:
+            print("No such blog", blog, "!")
+        else:
+            blog_id = self._cursor.fetchall()
+
+            # String like (id1, id2),(...)
+            val_list = """"""
+            for b_id in blog_id:
+                val_list += """({},{}),""".format(post_id, b_id[0])
+            val_list = val_list.rstrip(',') + """;"""
+            sql = "INSERT INTO blogpost(post_id, blog_id) VALUES" + val_list
+            self._cursor.execute(sql)
+            print("Post was successfully added to blog", blog, "!")
+
+    def update_post_header(self, username, post_id, new_header):
         if username not in self.__authorized_users:
             print("User must be authorized to update post header!")
             return
         sql = """UPDATE post SET header='{}'
-                 WHERE user_id={} AND header='{}';""".format(new_header,
-                                                             self.__authorized_users[username], header)
+                 WHERE user_id={} AND id={};""".format(new_header,
+                                                       self.__authorized_users[username],
+                                                       post_id)
 
         self._cursor.execute(sql)
         if self._cursor.rowcount:
@@ -153,14 +167,14 @@ class BlogRedactor:
         else:
             print("No post with that header!")
 
-    def update_post_description(self, username, header, new_description):
+    def update_post_description(self, username, post_id, new_description):
         if username not in self.__authorized_users:
             print("User must be authorized to update post description!")
             return
         sql = """UPDATE post SET description='{}'
-                 WHERE user_id={} AND header='{}';""".format(new_description,
+                 WHERE user_id={} AND id={};""".format(new_description,
                                                             self.__authorized_users[username],
-                                                            header)
+                                                            post_id)
         self._cursor.execute(sql)
         if self._cursor.rowcount:
             print("Post was successfully renamed!")
@@ -171,42 +185,54 @@ class BlogRedactor:
         if username not in self.__authorized_users:
             print("User must be authorized to update post blog list!")
             return
-        sql = """SELECT id, description FROM post
+        sql = """SELECT id FROM post
                  WHERE header='{}' AND user_id={};""".format(header,
-                                                            self.__authorized_users[username])
+                                                             self.__authorized_users[username])
         if not self._cursor.rowcount:
             print("No such post!")
             return
         self._cursor.execute(sql)
-        post_id, description = self._cursor.fetchall()[0]
+        post_id = self._cursor.fetchone()[0]
         sql = """DELETE FROM blogpost WHERE post_id={};""".format(post_id)
-        self._cursor.execute(sql)
+        self._cursor.execute
+
+        blog_list = """("""
         for blog in blogs:
-            sql = """SELECT id FROM blog
-                     WHERE name='{}' AND user_id={};""".format(blog, self.__authorized_users[username])
-            self._cursor.execute(sql)
-            blog_id = self._cursor.fetchall()[0][0]
-            sql = "INSERT INTO blogpost(post_id, blog_id) VALUES({}, {});".format(post_id, blog_id)
+            blog_list += """'{}',""".format(blog)
+        blog_list = blog_list.rstrip(',') + """);"""
+        
+        sql = """SELECT id FROM blog WHERE name IN """ + blog_list
+        self._cursor.execute(sql)
+        if not self._cursor.rowcount:
+            print("No such blogs", blog, "!")
+        else:
+            blog_id = self._cursor.fetchall()
+
+            val_list = """"""
+            for b_id in blog_id:
+                val_list += """({},{}),""".format(post_id, b_id[0])
+            val_list = val_list.rstrip(',') + """;"""
+            sql = "INSERT INTO blogpost(post_id, blog_id) VALUES" + val_list
             self._cursor.execute(sql)
             print("Post was successfully added to blog", blog, "!")
 
-    def delete_post(self, username, header):
+    def delete_post(self, username, post_id):
         if username not in self.__authorized_users:
             print("User must be authorized to delete post!")
             return
         sql = """SELECT id FROM post
-                 WHERE header='{}' AND user_id={};""".format(header,
-                                                             self.__authorized_users[username])
+                 WHERE id={} AND user_id={};""".format(post_id,
+                                                       self.__authorized_users[username])
         self._cursor.execute(sql)
         if not self._cursor.rowcount:
             print("No such post!")
             return
-        post_id = self._cursor.fetchall()[0][0]
+        post_id = self._cursor.fetchone()[0]
         sql = """DELETE FROM blogpost WHERE post_id={};""".format(post_id)
         self._cursor.execute(sql)
         sql = """DELETE FROM post
-                 WHERE header='{}' AND user_id={};""".format(header,
-                                                             self.__authorized_users[username])
+                 WHERE id={} AND user_id={};""".format(post_id,
+                                                       self.__authorized_users[username])
         self._cursor.execute(sql)
         if self._cursor.rowcount:
             print("Post was successfully deleted!")
@@ -229,7 +255,7 @@ class BlogRedactor:
         if not self._cursor.rowcount:
             print("No such post!")
             return
-        post_id = self._cursor.fetchall()[0][0]
+        post_id = self._cursor.fetchone()[0]
         comm_id = 'NULL'
         if comment_descr:
             sql = """SELECT id FROM comment
@@ -240,7 +266,7 @@ class BlogRedactor:
             if not self._cursor.rowcount:
                 print("No such comment in this post!")
                 return
-            comm_id = self._cursor.fetchall()[0][0]
+            comm_id = self._cursor.fetchone()[0]
         sql = """INSERT INTO comment(user_id, post_id, parent_comment_id, description)
                  VALUES({}, {}, {}, '{}');""".format(self.__authorized_users[username],
                                                      post_id,
@@ -260,7 +286,7 @@ class BlogRedactor:
         if not self._cursor.rowcount:
             print("No such post!")
             return
-        post_id = self._cursor.fetchall()[0][0]
+        post_id = self._cursor.fetchone()[0]
         sql = """SELECT description FROM comment
                  WHERE user_id={} AND post_id={}""".format(self.__authorized_users[username],
                                                            post_id)
@@ -276,7 +302,7 @@ class BlogRedactor:
             self._cursor.execute(sql)
 
             if self._cursor.rowcount:
-                user_id = self._cursor.fetchall()[0][0]
+                user_id = self._cursor.fetchone()[0]
                 sql = """SELECT post_id, description
                          FROM comment WHERE user_id={};""".format(user_id)
                 self._cursor.execute(sql)
@@ -285,7 +311,7 @@ class BlogRedactor:
                 self._cursor.execute(sql)
 
                 if self._cursor.rowcount:
-                    blog_id = self._cursor.fetchall()[0][0]
+                    blog_id = self._cursor.fetchone()[0]
                     sql = """SELECT post_id FROM blogpost WHERE blog_id={};""".format(blog_id)
                     self._cursor.execute(sql)
                     blog_list = [blog[0] for blog in self._cursor.fetchall()]
@@ -302,13 +328,13 @@ class BlogRedactor:
             print("No such post!")
             return
 
-        post_id = self._cursor.fetchall()[0][0]
+        post_id = self._cursor.fetchone()[0]
         sql = """SELECT id FROM comment
                  WHERE description='{}' AND post_id={};""".format(comment, post_id)
         self._cursor.execute(sql)
         if not self._cursor.rowcount:
             return None
-        comm_id = self._cursor.fetchall()[0][0]
+        comm_id = self._cursor.fetchone()[0]
         sql = """SELECT description FROM comment
                 WHERE post_id={} AND parent_comment_id={};""".format(post_id, comm_id)
         self._cursor.execute(sql)
@@ -331,25 +357,6 @@ class BlogRedactor:
 
 if __name__ == "__main__":
     blog_red = BlogRedactor()
-    #blog_red.add_user('newmisha', '123456')
-    blog_red.authorize('newmisha', '123456')
-    #blog_red.create_blog('newmisha', 'New blog', 'This blog about me and my friends')
-    # blog_red.update_blog_name('misha', 'My blog', 'My first blog')
-    # blog_red.update_blog_sample('misha', 'My first blog', 'This is about only me')
-    # blog_red.create_post('misha', 'NewPost', 'How old are you?', ['My first blog'])
-    # blog_red.create_post('misha', 'ergrgsffergerg', 'How old are you?', ['My first blog'])
-    # blog_red.update_post_header('misha', 'ergrgsffergerg', 'My new post x2')
-    # blog_red.update_post_description('misha', 'NewPost', 'This is changed descr')
-    # blog_red.create_blog('misha', 'My Blood', '21pilot')
-
     
-    #blog_red.create_post('newmisha', 'New post', 'Some inf', ['New blog'])
-    #blog_red.add_comment('newmisha', 'New post', 'Hello')
-    #blog_red.add_comment('newmisha', 'New post', 'Privet')
-    #blog_red.add_comment('newmisha', 'New post', 'wassap bro', 'Hello')
-    #blog_red.add_comment('newmisha', 'New post', 'Sheeee ne vmerla', 'Privet')
-
-    print(blog_red.get_sub_comments('New post', 'Hello'))
-    print(blog_red.get_sub_comments('New post', 'Privet'))
     blog_red.commit_changes()
     blog_red.close_connection()
