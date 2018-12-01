@@ -148,3 +148,4 @@ if __name__ == "__main__":
     blog_cr = BlogCreator(params.db_name, params.cfg_path)
     blog_cr.create()
 
+# select description from(select * from comment order by parent_comment_id, id)

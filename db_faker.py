@@ -50,10 +50,19 @@ class DatabaseFiller:
     def _fake_comments(self, db, usr_dict):
         cnt = 0
         faker = Faker()
-        posts_list = db.get_posts_list()
-        while cnt < self._comm_cnt:
+        posts_list = db.get_posts_id()
+
+        while cnt < self._comm_cnt / 2:
             for user in usr_dict:
                 db.add_comment(user, choice(posts_list), faker.text()[:100])
+                cnt += 1
+                if cnt >= self._comm_cnt / 2:
+                    break
+        comments_id = db.get_comments_id()
+        while cnt <  self._comm_cnt:
+            for user in usr_dict:
+                comment = choice(comments_id)
+                db.add_comment(user, comment[1], faker.text()[:100], comment[0])
                 cnt += 1
                 if cnt >= self._comm_cnt:
                     break
@@ -111,5 +120,5 @@ if __name__ == "__main__":
     bl_red = blog_redactor.BlogRedactor()
     filler.fill(bl_red)
     bl_red.close_connection
-    print("Users faker time - ", time() - start)
+    print("Faker work time - ", time() - start)
 

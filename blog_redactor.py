@@ -131,12 +131,12 @@ class BlogRedactor:
         post_id = self._cursor.fetchone()[0]
 
         # String like ('blog1','blog2');
-        blog_list = """("""
+        blog_list = "("
         for blog in blogs:
-            blog_list += """'{}',""".format(blog)
-        blog_list = blog_list.rstrip(',') + """);"""
+            blog_list += "'{}',".format(blog)
+        blog_list = blog_list.rstrip(',') + ")"
         
-        sql = """SELECT id FROM blog WHERE name IN """ + blog_list
+        sql = """SELECT id FROM blog WHERE name IN {};""".format(blog_list)
         self._cursor.execute(sql)
         if not self._cursor.rowcount:
             print("No such blog", blog, "!")
@@ -144,11 +144,11 @@ class BlogRedactor:
             blog_id = self._cursor.fetchall()
 
             # String like (id1, id2),(...)
-            val_list = """"""
+            val_list = ""
             for b_id in blog_id:
-                val_list += """({},{}),""".format(post_id, b_id[0])
-            val_list = val_list.rstrip(',') + """;"""
-            sql = "INSERT INTO blogpost(post_id, blog_id) VALUES" + val_list
+                val_list += "({},{}),".format(post_id, b_id[0])
+            val_list = val_list.rstrip(',')
+            sql = "INSERT INTO blogpost(post_id, blog_id) VALUES {};".format(val_list)
             self._cursor.execute(sql)
             print("Post was successfully added to blog", blog, "!")
 
@@ -173,8 +173,8 @@ class BlogRedactor:
             return
         sql = """UPDATE post SET description='{}'
                  WHERE user_id={} AND id={};""".format(new_description,
-                                                            self.__authorized_users[username],
-                                                            post_id)
+                                                       self.__authorized_users[username],
+                                                       post_id)
         self._cursor.execute(sql)
         if self._cursor.rowcount:
             print("Post was successfully renamed!")
@@ -196,25 +196,27 @@ class BlogRedactor:
         sql = """DELETE FROM blogpost WHERE post_id={};""".format(post_id)
         self._cursor.execute
 
-        blog_list = """("""
+        # String like (blog1, blog2...)
+        blog_list = "("
         for blog in blogs:
-            blog_list += """'{}',""".format(blog)
-        blog_list = blog_list.rstrip(',') + """);"""
+            blog_list += "'{}',".format(blog)
+        blog_list = blog_list.rstrip(',') + ")"
         
-        sql = """SELECT id FROM blog WHERE name IN """ + blog_list
+        sql = """SELECT id FROM blog WHERE name IN {};""".format(blog_list)
         self._cursor.execute(sql)
         if not self._cursor.rowcount:
             print("No such blogs", blog, "!")
-        else:
-            blog_id = self._cursor.fetchall()
+            return
+        blog_id = self._cursor.fetchall()
 
-            val_list = """"""
-            for b_id in blog_id:
-                val_list += """({},{}),""".format(post_id, b_id[0])
-            val_list = val_list.rstrip(',') + """;"""
-            sql = "INSERT INTO blogpost(post_id, blog_id) VALUES" + val_list
-            self._cursor.execute(sql)
-            print("Post was successfully added to blog", blog, "!")
+        # String like (post_id, blog_id), (...)
+        val_list = ""
+        for b_id in blog_id:
+            val_list += "({},{}),".format(post_id, b_id[0])
+        val_list = val_list.rstrip(',')
+        sql = "INSERT INTO blogpost(post_id, blog_id) VALUES {};".format(val_list)
+        self._cursor.execute(sql)
+        print("Post was successfully added to blog", blog, "!")
 
     def delete_post(self, username, post_id):
         if username not in self.__authorized_users:
@@ -245,18 +247,17 @@ class BlogRedactor:
         posts_list = self._cursor.fetchall() 
         return [post[0] for post in posts_list]
 
-    def add_comment(self, username, post_header, comment_text, comment_id=None):
+    def get_posts_id(self):
+        sql = """SELECT id FROM post;"""
+        self._cursor.execute(sql)
+        post_ids = self._cursor.fetchall()
+        return [post_id[0] for post_id in post_ids]
+
+    def add_comment(self, username, post_id, comment_text, comment_id=None):
         if username not in self.__authorized_users:
             print("User must be authorized to create comment!")
             return
-        sql = """SELECT id FROM post
-                 WHERE header='{}';""".format(post_header)
-        self._cursor.execute(sql)
-        if not self._cursor.rowcount:
-            print("No such post!")
-            return
 
-        post_id = self._cursor.fetchone()[0]
         comm_id = comment_id or 'NULL'
         sql = """INSERT INTO comment(user_id, post_id, parent_comment_id, description)
                  VALUES({}, {}, {}, '{}');""".format(self.__authorized_users[username],
@@ -278,57 +279,36 @@ class BlogRedactor:
         comments = self._cursor.fetchall()
         return [comment[0] for comment in comments]
 
-    def get_users_comments(self, users, blog):
-        comments = []
+    def get_comments_id(self):
+        sql = """SELECT id, post_id FROM comment;"""
+        self._cursor.execute(sql)
+        comments = self._cursor.fetchall()
+        return [comment for comment in comments]
 
-        for user in users:
-            sql = """SELECT id FROM user WHERE login='{}';""".format(user)
-            self._cursor.execute(sql)
+    def get_users_comments(self, users_id, blog_id):
+        # String like (id1, id2, id3...)
+        id_list = "("
+        for u_id in users_id:
+            id_list += "{},".format(u_id)
+        id_list = id_list.rstrip(',') + ")"
+            
+        sql = """SELECT comment.description FROM blogpost 
+                 INNER JOIN post ON post_id=post.id
+                 INNER JOIN comment ON comment.post_id=post.id
+                 WHERE blog_id={} and post.user_id IN {};""".format(blog_id, id_list)
+        self._cursor.execute(sql)
+        return [comm[0] for comm in self._cursor.fetchall()]
 
-            if self._cursor.rowcount:
-                user_id = self._cursor.fetchone()[0]
-                sql = """SELECT post_id, description
-                         FROM comment WHERE user_id={};""".format(user_id)
-                self._cursor.execute(sql)
-                comm_list = [(comment[0], comment[1]) for comment in self._cursor.fetchall()]
-                sql = """SELECT id FROM blog WHERE name='{}';""".format(blog)
-                self._cursor.execute(sql)
-
-                if self._cursor.rowcount:
-                    blog_id = self._cursor.fetchone()[0]
-                    sql = """SELECT post_id FROM blogpost WHERE blog_id={};""".format(blog_id)
-                    self._cursor.execute(sql)
-                    blog_list = [blog[0] for blog in self._cursor.fetchall()]
-
-                    for comm in comm_list:
-                        if comm[0] in blog_list:
-                            comments.append(comm[1])
-        return comments
-
-    def get_sub_comments(self, post, comment):
-        sql = """SELECT id FROM post WHERE header='{}';""".format(post)
+    def get_sub_comments(self, comment_id):
+        sql = """SELECT @pv:=id as id, description FROM comment
+                 JOIN (select @pv:={})tmp
+                 WHERE parent_comment_id=@pv;""".format(comment_id)
         self._cursor.execute(sql)
         if not self._cursor.rowcount:
-            print("No such post!")
-            return
-
-        post_id = self._cursor.fetchone()[0]
-        sql = """SELECT id FROM comment
-                 WHERE description='{}' AND post_id={};""".format(comment, post_id)
-        self._cursor.execute(sql)
-        if not self._cursor.rowcount:
-            return None
-        comm_id = self._cursor.fetchone()[0]
-        sql = """SELECT description FROM comment
-                WHERE post_id={} AND parent_comment_id={};""".format(post_id, comm_id)
-        self._cursor.execute(sql)
-        if not self._cursor.rowcount:
-            return comment
-        comments_tree = {}
-        comments_tree[comment] = []
-        for com in self._cursor.fetchall():
-            comments_tree[comment].append(self.get_sub_comments(post, com[0]))
-        return comments_tree
+            print("No such comments!")
+            return []
+        comments = self._cursor.fetchall()
+        return [comm[1] for comm in comments]
 
     def commit_changes(self):
         self._db.commit()
@@ -341,6 +321,8 @@ class BlogRedactor:
 
 if __name__ == "__main__":
     blog_red = BlogRedactor()
-    
+    print(blog_red.get_sub_comments(33))
     blog_red.commit_changes()
     blog_red.close_connection()
+
+
